@@ -1,12 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require("jsonwebtoken")
+const stripe = require('stripe')('sk_test_51N3foiGn4oE3WVXCgQSXeJzqwLQa97LhGyJxN3d3I6kJ0V6PAFOMCU0kSNsBb22SidKzZ4XgFNlZjzMlgqrWjNPQ000j0lYAAt');
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 const port = process.env.port || 5000
 const app = express();
-
-
 
 
 
@@ -24,7 +23,7 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 })
-
+console.log(process.env.STRIPE_SECRET_KEY)
 console.log(uri)
 
 const DBConnect = async () => {
@@ -45,6 +44,7 @@ const usersCollection = client.db('EventHiveDb').collection('users');
 const bookingsCollection = client.db('EventHiveDb').collection('bookings');
 const venueCollection = client.db('EventHiveDb').collection('venue');
 const PhotographerCollection = client.db('EventHiveDb').collection('Photographer');
+const paymentsCollection = client.db('EventHiveDb').collection('payments');
 
 
 
@@ -104,7 +104,7 @@ app.get("/jwt", (req, res) => {
         console.log(email);
 
         const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
-            expiresIn: '1d',
+            expiresIn: '100d',
         })
         if (token) {
             console.log(token)
@@ -303,7 +303,7 @@ app.get("/photography", async (req, res) => {
 })
 app.get("/photography/:id", async (req, res) => {
     try {
-        id= req.params.id
+        id = req.params.id
         const result = await PhotographerCollection.findOne({ _id: new ObjectId(id) })
         res.send({
             success: true,
@@ -358,28 +358,28 @@ app.patch('/user/:email', async (req, res) => {
 });
 
 // make admin 
-app.put('/user/admin/:id',async (req,res)=>{
+app.put('/user/admin/:id', async (req, res) => {
 
     const id = req.params.id;
-    const filter = {_id: new ObjectId(id)}
-    const options = {upsert:true};
-    const updateDoc={
-        $set:{
-            role:'admin'
+    const filter = { _id: new ObjectId(id) }
+    const options = { upsert: true };
+    const updateDoc = {
+        $set: {
+            role: 'admin'
         }
     }
-    const result = await usersCollection.updateOne(filter,updateDoc,options)
- res.send(result)
+    const result = await usersCollection.updateOne(filter, updateDoc, options)
+    res.send(result)
 })
 
-  // check admin
-  app.get('/users/admin/:email',async(req,res)=>{
+// check admin
+app.get('/users/admin/:email', async (req, res) => {
 
-    const email= req.params.email;
-    const query = {email}
+    const email = req.params.email;
+    const query = { email }
     const user = await usersCollection.findOne(query);
-    res.send({isAdmin: user?.role ==='admin'})
-    })
+    res.send({ isAdmin: user?.role === 'admin' })
+})
 
 /*---------------  Patch OPEration ____________*/
 
@@ -404,9 +404,9 @@ app.post('/orders', async (req, res) => {
 app.post('/upload/:event', async (req, res) => {
     try {
         const event = req.params.event;
-         const eventData = req.body;
-          let collection;
-          switch (event) {
+        const eventData = req.body;
+        let collection;
+        switch (event) {
             case 'Photographer':
                 collection = PhotographerCollection;
                 break;
@@ -414,7 +414,7 @@ app.post('/upload/:event', async (req, res) => {
                 collection = venueCollection;
                 break;
             case 'Makeup & decoration':
-                collection = MakeupCollection;
+                collection = MakeupServiceCollection;
                 break;
             case 'Costumes':
                 collection = costumesCollection;
@@ -434,4 +434,61 @@ app.post('/upload/:event', async (req, res) => {
 
 
 
+
 /*---------------  Post OPEration ____________*/
+
+//payments
+app.post('/create-payment-intent', async (req, res) => {
+    try {
+        const booking = req.body;
+        const price = booking.price;
+        const amount = price * 100;
+          console.log(amount)
+        const paymentIntent = await stripe.paymentIntents.create({
+            currency: 'usd',
+            amount: amount,
+            "payment_method_types": [
+                "card"
+            ]
+           
+        })
+        res.send({
+            clientSecret: paymentIntent.client_secret,
+        })
+       
+    }
+    catch (error) {
+        console.log(error.message)
+    }
+})
+
+
+// save payment data
+app.post('/payments', async (req, res) => {
+    try {
+        const payment = req.body;
+        console.log("hit payment")
+        const result = await paymentsCollection.insertOne(payment);
+        const id = payment.bookingId
+        const filter = { _id: new ObjectId(id) }
+        const updatedDoc = {
+            $set: {
+                paid: true,
+                transactionId: payment.transactionId
+            }
+        }
+        const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc)
+        res.send(result)
+    } catch (error) {
+        console.log(error.message)
+    }
+})
+
+
+//payments order
+app.get('/orders/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) }
+    const order = await bookingsCollection.findOne(query);
+    res.send(order)
+})
