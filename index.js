@@ -1,12 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require("jsonwebtoken")
+const SSLCommerzPayment = require('sslcommerz-lts')
 const stripe = require('stripe')('sk_test_51N3foiGn4oE3WVXCgQSXeJzqwLQa97LhGyJxN3d3I6kJ0V6PAFOMCU0kSNsBb22SidKzZ4XgFNlZjzMlgqrWjNPQ000j0lYAAt');
 const { MongoClient, ObjectId, ServerApiVersion } = require('mongodb');
 require('dotenv').config();
 const port = process.env.port || 5000
 const app = express();
-
+const store_id = '<your_store_id>'
+const store_passwd = '<your_store_password>'
+const is_live = false //true for live, false for sandbox
 
 
 // middleware
@@ -101,7 +104,7 @@ app.put('/user/:email', async (req, res) => {
 app.get("/jwt", (req, res) => {
     try {
         const { email } = req.query;
-        console.log(email);
+        
 
         const token = jwt.sign({ email }, process.env.ACCESS_TOKEN_SECRET, {
             expiresIn: '100d',
@@ -393,7 +396,7 @@ app.get('/users/admin/:email', async (req, res) => {
 app.post('/orders', async (req, res) => {
     try {
         const orders = req.body;
-        console.log(orders)
+      
         const data = await bookingsCollection.insertOne(orders)
         res.send(data)
     } catch (error) {
