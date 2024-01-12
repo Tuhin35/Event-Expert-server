@@ -495,3 +495,10 @@ app.get('/orders/:id', async (req, res) => {
     const order = await bookingsCollection.findOne(query);
     res.send(order)
 })
+// delete order
+ app.delete('/orders/:id', async(req,res)=>{
+const id = req.params.id;
+const query = {_id: new ObjectId(id)}
+const result = await bookingsCollection.deleteOne(query);
+res.send(result)
+ })
